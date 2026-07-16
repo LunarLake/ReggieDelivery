@@ -1,8 +1,24 @@
+# Spring Initializr boilerplate (not needed in repo)
 HELP.md
+
+### Build ###
 target/
-.mvn/wrapper/maven-wrapper.jar
+build/
+out/
 !**/src/main/**/target/
 !**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Maven Wrapper jar (properties still tracked under .mvn/)
+.mvn/wrapper/maven-wrapper.jar
+
+### Compiled / packages ###
+*.class
+*.jar
+*.war
+*.ear
+!**/src/main/**/*.jar
 
 ### STS ###
 .apt_generated
@@ -25,15 +41,14 @@ target/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
+### VS Code / Cursor ###
 .vscode/
+.cursor/
 
 ### AI agent local state ###
 .claude/
+.grok/
 
 ### OS ###
 .DS_Store
@@ -53,3 +68,10 @@ replay_pid*
 
 ### Runtime uploads (when implemented) ###
 /upload/
+
+### Editor temp ###
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
