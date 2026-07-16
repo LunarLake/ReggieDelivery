@@ -31,3 +31,25 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### AI agent local state ###
+.claude/
+
+### OS ###
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+### Logs & crash dumps ###
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+
+### Local secrets (DB password etc.) ###
+.env
+.env.*
+**/application-local.yml
+
+### Runtime uploads (when implemented) ###
+/upload/
