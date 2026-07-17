@@ -46,9 +46,9 @@ com.wyc.reggie
 │   └── impl/                  # Implementations (extend ServiceImpl<M, T>)
 ├── mapper/                    # MyBatis-Plus BaseMapper interfaces
 ├── entity/                    # Domain models (@Data, Serializable)
-├── common/                    # R (response wrapper), WebConfig, future utilities
-├── config/                    # Configuration classes (future)
-└── filter/                    # Servlet filters (login check, etc.)
+├── common/                    # R (response wrapper), WebUtils (JSON render)
+├── config/                    # WebConfig (static resources), MybatisPlusConfig (pagination)
+└── filter/                    # LoginCheckFilter (@WebFilter session check)
 ```
 
 ### MyBatis-Plus Patterns (already established)
@@ -105,6 +105,7 @@ The customer storefront (`/front/index.html`) is a mobile-oriented ordering inte
 | `mysql-connector-j` | (managed) | MySQL JDBC driver (runtime) |
 | `lombok` | (managed) | `@Data`, `@Slf4j`, etc. (compile-time) |
 | `mybatis-plus-boot-starter` | 3.5.10.1 | ORM — `BaseMapper`, `LambdaQueryWrapper`, pagination |
+| `mybatis-plus-jsqlparser` | 3.5.10.1 | SQL parser for pagination plugin (separate from 3.5.9+) |
 | `druid-spring-boot-starter` | 1.2.23 | Alibaba Druid connection pool |
 | `commons-lang3` | 3.17.0 | `StringUtils`, `ObjectUtils` utilities |
 | `spring-boot-starter-test` | (managed) | JUnit 5 + MockMvc test support |
@@ -121,7 +122,8 @@ The full schema is defined in `资料/db_reggie.sql`. The database `reggie` uses
 - **Audit fields**: Most tables have `create_time`, `update_time`, `create_user`, `update_user`.
 - **Soft delete**: `is_deleted` (0/1) on: `address_book`, `dish`, `dish_flavor`, `setmeal`, `setmeal_dish`. **NOT** on `employee`, `category`, `orders`, `order_detail`, `shopping_cart`, `user`.
 - **Price storage**: Prices are stored in **cents (分)** as `decimal(10,2)`. The frontend divides by 100 to display yuan. E.g., `7800.00` in DB = ¥78.00.
-- **Password**: MD5 hash. The seed admin password is `e10adc3949ba59abbe56e057f20f883e` (MD5 of `123456`). The current login controller does plaintext comparison — **needs to be updated to MD5 + salt**.
+- **Password**: MD5 hash (`DigestUtils.md5DigestAsHex`). The seed admin password is `e10adc3949ba59abbe56e057f20f883e` (MD5 of `123456`). New employees default to `123456` (also MD5-hashed on save). No salt is used currently — consider upgrading to BCrypt in the future.
+- **Session**: Login stores `employee` id (Long) in `HttpSession` under key `"employee"`. The login check filter also supports a `"user"` key for future customer login.
 
 ### Tables
 
@@ -156,20 +158,35 @@ The full schema is defined in `资料/db_reggie.sql`. The database `reggie` uses
 ## Implementation Status
 
 Currently implemented:
-- **Employee login**: `POST /employee/login` — plaintext password comparison (⚠️ DB stores MD5 hashes, controller needs updating), returns `R<Employee>` or error
+- **Employee login**: `POST /employee/login` — MD5 password comparison, session management (invalidates old session, stores `employee` id in new one), returns `R<Employee>` or error
+- **Employee logout**: `POST /employee/logout` — invalidates session
+- **Employee pagination**: `GET /employee/page` — supports name fuzzy search, password masking in results, ordered by `update_time` desc
+- **Employee create**: `POST /employee` — username uniqueness check, auto-generates MD5 hash of default password `123456`, auto-fills audit fields (`createUser`/`updateUser` from session)
 - **Employee entity + mapper + service**: Full CRUD via MyBatis-Plus
-- **Static resource serving**: Both frontends accessible via `WebConfig`
+- **Login check filter**: `LoginCheckFilter` (`@WebFilter("/*")`) — Ant-style path whitelist (login/logout, static resources, future user endpoints), checks session for `employee` or `user` attribute, returns `R.error("NOTLOGIN")` as JSON via `WebUtils` on failure
+- **WebUtils**: Static utility for rendering `R<T>` as JSON to `HttpServletResponse` (used by filter, injected with Spring's `ObjectMapper`)
+- **Static resource serving**: Both frontends accessible via `WebConfig` (extends `WebMvcConfigurationSupport`)
 
 Not yet implemented (frontend pages exist, waiting for backend APIs):
-- Employee CRUD endpoints (list/add/edit/status toggle)
+- Employee edit/status toggle (by ID)
 - Category management (分类管理)
 - Dish management (菜品管理) with flavor options
 - Combo/meal management (套餐管理) with dish composition
 - Order management (订单明细)
 - Customer-facing APIs (category listing, dish listing, cart, address, order placement)
-- Login check filter (session/token validation)
-- Password hashing (MD5 → BCrypt or similar upgrade)
+- Customer user entity, login, and session management
 - File upload/download for images (`/common/upload`, `/common/download`)
+
+## Filter Architecture
+
+`LoginCheckFilter` (`@WebFilter("/*")`) intercepts all requests and uses `AntPathMatcher` for path matching:
+
+- **Whitelist** (passed through): `/employee/login`, `/employee/logout`, `/backend/**`, `/front/**`, `/common/**`, `/user/sendMsg`, `/user/login`, `/user/loginout`
+- **Auth check**: Looks for `employee` or `user` attribute in HttpSession — either present means logged in
+- **Rejection**: Calls `WebUtils.renderJson(response, R.error("NOTLOGIN"))` — the `NOTLOGIN` string is matched by the frontend Axios interceptor to redirect to the login page
+- **Registration**: `ReggieApplication` is annotated with `@ServletComponentScan` so `@WebFilter` is auto-detected
+
+`WebUtils` is a Spring-managed `@Component` that injects Jackson's `ObjectMapper` via setter injection into a static field, enabling static `renderJson()` calls from the filter.
 
 ## Testing
 
