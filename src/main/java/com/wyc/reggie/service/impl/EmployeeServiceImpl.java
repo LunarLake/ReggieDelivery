@@ -8,5 +8,4 @@ import org.springframework.stereotype.Service;
 // 业务实现类
 @Service
 public class EmployeeServiceImpl extends ServiceImpl<EmployeeMapper, Employee> implements EmployeeService {
-
 }
