@@ -1,16 +1,19 @@
 package com.wyc.reggie.filter;
 
+import com.wyc.reggie.common.BaseContext;
 import com.wyc.reggie.common.R;
 import com.wyc.reggie.common.WebUtils;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.AntPathMatcher;
 
 import java.io.IOException;
 
 // 登录检查过滤器注解，用于拦截所有请求，检查用户是否已登录
+@Slf4j
 @WebFilter(filterName = "loginCheckFilter", urlPatterns = "/*")
 public class LoginCheckFilter implements Filter {
     public static final AntPathMatcher PATH_MATCHER = new AntPathMatcher(); // 路径匹配器，用于匹配请求路径
@@ -36,12 +39,14 @@ public class LoginCheckFilter implements Filter {
             chain.doFilter(request, response); // 如果在放行列表中，直接放行
             return;
         }
-        if(httpRequest.getSession().getAttribute("employee") != null) { // 检查员工是否已登录
-            chain.doFilter(request, response); // 如果已登录，放行请求
-            return;
-        }
-        if(httpRequest.getSession().getAttribute("user") != null) { // 检查用户是否已登录
-            chain.doFilter(request, response); // 如果已登录，放行请求
+        Long employeeId = (Long) httpRequest.getSession().getAttribute("employee");
+        if (employeeId != null) {
+            BaseContext.setCurrentId(employeeId);
+            try {
+                chain.doFilter(request, response); // 如果已登录，放行请求
+            } finally {
+                BaseContext.remove();
+            }
             return;
         }
         WebUtils.renderJson(httpResponse, R.error("NOTLOGIN")); // 与前端拦截器一致，触发跳转登录页
@@ -54,4 +59,5 @@ public class LoginCheckFilter implements Filter {
         }
         return false;
     }
+
 }

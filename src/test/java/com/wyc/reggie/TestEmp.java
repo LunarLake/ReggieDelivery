@@ -2,13 +2,13 @@ package com.wyc.reggie;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.wyc.reggie.common.BaseContext;
 import com.wyc.reggie.entity.Employee;
 import com.wyc.reggie.mapper.EmployeeMapper;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,26 +22,31 @@ class TestEmp {
 
     private static Long testEmpId;
 
+    @BeforeEach
+    void setUp() {
+        BaseContext.setCurrentId(1766200000000000001L);
+    }
+
+    @AfterEach
+    void tearDown() {
+        BaseContext.remove();
+    }
+
     @Test
     @Order(1)
     void testInsert() {
-        // 清理可能残留的测试数据
         LambdaQueryWrapper<Employee> cleanWrapper = new LambdaQueryWrapper<>();
         cleanWrapper.eq(Employee::getUsername, "test_crud");
         employeeMapper.delete(cleanWrapper);
 
         Employee e = new Employee();
-        e.setName("测试员工");// 设置姓名
-        e.setUsername("test_crud");// 设置用户名
+        e.setName("测试员工");
+        e.setUsername("test_crud");
         e.setPassword("123456");
         e.setPhone("13800001111");
         e.setSex("1");
         e.setIdNumber("110101200001010011");
         e.setStatus(1);
-        e.setCreateTime(LocalDateTime.now());
-        e.setUpdateTime(LocalDateTime.now());
-        e.setCreateUser(1L);
-        e.setUpdateUser(1L);
 
         int rows = employeeMapper.insert(e);
         assertEquals(1, rows);
@@ -88,8 +93,6 @@ class TestEmp {
         Employee e = new Employee();
         e.setId(testEmpId);
         e.setPhone("13900009999");
-        e.setUpdateTime(LocalDateTime.now());
-        e.setUpdateUser(1L);
 
         int rows = employeeMapper.updateById(e);
         assertEquals(1, rows);
@@ -105,8 +108,7 @@ class TestEmp {
 
         LambdaUpdateWrapper<Employee> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Employee::getId, testEmpId)
-               .set(Employee::getName, "测试员工-已修改")
-               .set(Employee::getUpdateTime, LocalDateTime.now());
+               .set(Employee::getName, "测试员工-已修改");
 
         int rows = employeeMapper.update(null, wrapper);
         assertEquals(1, rows);

@@ -65,7 +65,6 @@ public class EmployeeController {
     // 更新员工信息（启用、禁用）
     @PutMapping
     public R<String> update(@RequestBody Employee employee) {
-
         employeeService.updateById(employee);
         return R.success("员工信息修改成功");
     }
