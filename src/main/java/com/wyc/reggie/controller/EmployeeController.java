@@ -11,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-
 @RestController
 @RequestMapping("/employee")
 public class EmployeeController {
@@ -66,18 +64,15 @@ public class EmployeeController {
 
     // 更新员工信息（启用、禁用）
     @PutMapping
-    public R<String> update(HttpServletRequest request, @RequestBody Employee employee) {
+    public R<String> update(@RequestBody Employee employee) {
 
-        Long id = (Long) request.getSession().getAttribute("employee");
-        employee.setUpdateTime(LocalDateTime.now());
-        employee.setUpdateUser(id);
         employeeService.updateById(employee);
         return R.success("员工信息修改成功");
     }
 
     // 新增员工
     @PostMapping
-    public R<String> save(HttpServletRequest request, @RequestBody Employee employee) {
+    public R<String> save(@RequestBody Employee employee) {
         //添加员工之前，先查询是否存在相同用户名的员工
         LambdaQueryWrapper<Employee> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Employee::getUsername, employee.getUsername());
@@ -89,11 +84,6 @@ public class EmployeeController {
         String initialPassword = "123456";
         String md5pwd = DigestUtils.md5DigestAsHex(initialPassword.getBytes());
         employee.setPassword(md5pwd);
-        employee.setCreateTime(LocalDateTime.now());
-        employee.setUpdateTime(LocalDateTime.now());
-        Long id = (Long) request.getSession().getAttribute("employee");
-        employee.setCreateUser(id);
-        employee.setUpdateUser(id);
         employeeService.save(employee);
         return R.success("新增员工成功");
     }
