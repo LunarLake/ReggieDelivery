@@ -1,261 +1,89 @@
-# CLAUDE.md
+# CLAUDE.md — 瑞吉外卖 (Reggie Takeout)
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
-
-Reggie takeout/delivery system (瑞吉外卖) — a Spring Boot 3.5.5 web application with a dual-frontend architecture: a management backend for restaurant staff and a customer-facing storefront for ordering.
+Spring Boot 3.5.5 + MyBatis-Plus 外卖系统，双前端架构（管理后台 + 用户端）。
 
 - **Group/Artifact**: `com.wyc` / `reggie`
 - **Java**: 17
-- **Package**: `com.wyc.reggie`
 
-## Build & Run Commands
+## 构建命令
 
 ```bash
-# Build (uses Maven Wrapper — no local Maven install needed)
-./mvnw clean compile
-
-# Run tests
-./mvnw test
-
-# Run a single test class
-./mvnw test -Dtest="ReggieApplicationTests"
-
-# Run a single test method
-./mvnw test -Dtest="ReggieApplicationTests#contextLoads"
-
-# Package as JAR
+./mvnw clean compile          # Windows: ./mvnw.cmd
+./mvnw test -Dtest="XxxTest"
 ./mvnw clean package -DskipTests
-
-# Run the application
 ./mvnw spring-boot:run
 ```
 
-On Windows, use `./mvnw.cmd` instead of `./mvnw`.
-
-## Architecture
-
-### Backend (Spring Boot layered architecture)
+## 架构
 
 ```
 com.wyc.reggie
-├── ReggieApplication          # @SpringBootApplication entry point
-├── controller/                # REST controllers
-├── service/                   # Interface definitions (extend IService<T>)
-│   └── impl/                  # Implementations (extend ServiceImpl<M, T>)
-├── mapper/                    # MyBatis-Plus BaseMapper interfaces
-├── entity/                    # Domain models (@Data, Serializable)
-├── common/                    # R, AppException, GlobalExceptionHandler, JacksonObjectMapper, MyMetaObjectHandler, WebUtils
-├── config/                    # WebConfig (static resources), MybatisPlusConfig (pagination)
-└── filter/                    # LoginCheckFilter (@WebFilter session check)
+├── controller/     # @RestController, 返回 R<T>
+├── service/        # extends IService<T>
+│   └── impl/       # extends ServiceImpl<M, T>
+├── mapper/         # extends BaseMapper<T>（无 XML）
+├── entity/         # @Data + Serializable
+├── common/         # R, AppException, GlobalExceptionHandler, JacksonObjectMapper, MyMetaObjectHandler, BaseContext
+├── config/         # WebConfig（静态资源 + Jackson）, MybatisPlusConfig（分页插件）
+└── filter/         # LoginCheckFilter
 ```
 
-### MyBatis-Plus Patterns (already established)
+## 关键约定
 
-All data-access follows these conventions:
-
-- **Mapper**: Interface extends `BaseMapper<Entity>` — no XML needed for CRUD.
-- **Service**: Interface extends `IService<Entity>`, impl extends `ServiceImpl<Mapper, Entity>`.
-- **Query**: Use `LambdaQueryWrapper<Entity>` for type-safe queries (e.g., `wrapper.eq(Entity::getUsername, value)`).
-- **Update**: Use `LambdaUpdateWrapper<Entity>` for partial updates (`wrapper.eq(Entity::getId, id).set(Entity::getName, newName)`).
-- **ID generation**: Snowflake (`id-type=assign_id` in config). IDs are auto-generated on insert — check `entity.getId()` after `mapper.insert(entity)`.
-
-### API Response Format
-
-All endpoints return `R<T>`:
+### API 响应：`R<T>`
 
 ```java
-// Success: code=1, data populated
-R.success(employee)
-
-// Error: code=0, msg populated
-R.error("登录失败")
+R.success(data)   // code=1
+R.error("msg")    // code=0
 ```
 
-Frontend Axios response interceptor checks `res.data.code === 0` — on `NOTLOGIN` msg it redirects to the login page and clears localStorage.
+前端 Axios 拦截器检查 `res.data.code === 0`，`NOTLOGIN` 时跳转登录页。
 
-### Dual Frontend (served as static resources)
+### MyBatis-Plus
 
-Both frontends are **static files** served directly by Spring Boot via `WebConfig` resource handlers — no build step, no bundler.
+- Mapper: `@Mapper` 接口 extends `BaseMapper<Entity>`
+- 查询: `LambdaQueryWrapper<Entity>`（如 `wrapper.eq(Entity::getName, val)`）
+- 更新: `LambdaUpdateWrapper<Entity>` + `.set(Entity::getXxx, val)`
+- ID: Snowflake（`id-type=assign_id`），insert 后 `entity.getId()` 即获取
+- 分页: `new Page<>(page, pageSize)` + `service.page(pageInfo, wrapper)`
 
-| Frontend            | URL Path      | Directory                     | Audience         |
-| ------------------- | ------------- | ----------------------------- | ---------------- |
-| Management backend  | `/backend/**` | `src/main/resources/backend/` | Restaurant staff |
-| Customer storefront | `/front/**`   | `src/main/resources/front/`   | End customers    |
+### 数据库
 
-The management backend (`/backend/index.html`) is an SPA shell using iframes for sub-pages:
+- 库名: `reggie`，charset: `utf8mb4`
+- 主键: `bigint(20)`，由 Snowflake 生成，**非 AUTO_INCREMENT**
+- **价格存分（cent）**：`decimal(10,2)`，如 `7800.00` = ¥78.00。前端展示除以 100
+- **密码**: MD5（`DigestUtils.md5DigestAsHex`），无盐，默认密码 `123456`
+- **软删除**: `is_deleted` (0/1) 仅部分表（address_book, dish, dish_flavor, setmeal, setmeal_dish）
+- 审计字段: `create_time`/`update_time`/`create_user`/`update_user`，由 `MyMetaObjectHandler` 自动填充，user 取自 `BaseContext`（ThreadLocal）
 
-- **Login**: `/backend/page/login/login.html` → calls `POST /employee/login`
-- **Main shell**: Vue 2 app with sidebar menu (员工管理, 分类管理, 菜品管理, 套餐管理, 订单明细), each loads its page in an iframe
-- Each sub-page has its own Vue instance and API module under `backend/api/`
+### 前台
 
-The customer storefront (`/front/index.html`) is a mobile-oriented ordering interface with category browsing, dish/meal selection, cart management, and checkout flow.
+| 前台     | URL           | 目录                          | 技术                       |
+| -------- | ------------- | ----------------------------- | -------------------------- |
+| 管理后台 | `/backend/**` | `src/main/resources/backend/` | Vue 2 + Element UI + Axios |
+| 用户端   | `/front/**`   | `src/main/resources/front/`   | Vue 2 + Vant UI + Axios    |
 
-**Frontend tech stack** (both frontends):
+Axios: `baseURL=/`，timeout 10s，`/backend/js/request.js`
 
-- Vue 2 (loaded via `<script>` tag, not a build tool)
-- Element UI component library
-- Axios (configured in `backend/js/request.js` — baseURL `/`, timeout 10s, response interceptor handles `NOTLOGIN` redirect)
-- Vant UI (customer frontend only, for mobile components)
+### 异常处理
 
-## Key Dependencies
+- 业务异常: `throw new AppException("msg")` → `GlobalExceptionHandler` 捕获 → `R.error(msg)`
+- 兜底: `Exception` → 打日志 → `R.error("服务器异常")`
 
-| Dependency                  | Version   | Purpose                                                 |
-| --------------------------- | --------- | ------------------------------------------------------- |
-| `spring-boot-starter-web`   | (managed) | REST API framework (Spring MVC)                         |
-| `mysql-connector-j`         | (managed) | MySQL JDBC driver (runtime)                             |
-| `lombok`                    | (managed) | `@Data`, `@Slf4j`, etc. (compile-time)                  |
-| `mybatis-plus-boot-starter` | 3.5.10.1  | ORM — `BaseMapper`, `LambdaQueryWrapper`, pagination    |
-| `mybatis-plus-jsqlparser`   | 3.5.10.1  | SQL parser for pagination plugin (separate from 3.5.9+) |
-| `druid-spring-boot-starter` | 1.2.23    | Alibaba Druid connection pool                           |
-| `commons-lang3`             | 3.17.0    | `StringUtils`, `ObjectUtils` utilities                  |
-| `spring-boot-starter-test`  | (managed) | JUnit 5 + MockMvc test support                          |
+### JSON 序列化
 
-**(managed)** = version controlled by `spring-boot-starter-parent` BOM.
+`JacksonObjectMapper`：Long → String（防 JS 精度丢失），时间 → `yyyy-MM-dd HH:mm:ss`
 
-Note: `mybatis-spring` is pinned to `3.0.4` explicitly (excluded from the mybatis-plus starter due to version conflict with Spring Boot 3.5.x).
+## 测试
 
-## Database Schema
+JUnit 5 + `@SpringBootTest`，MockMvc 用于 controller 层。
 
-The full schema is defined in `资料/db_reggie.sql`. The database `reggie` uses `utf8mb4` charset. Key conventions:
+## 工作模式
 
-- **Primary keys**: `bigint(20)`, populated by Snowflake algorithm (MyBatis-Plus `assign_id`). Not AUTO_INCREMENT.
-- **Audit fields**: Most tables have `create_time`, `update_time`, `create_user`, `update_user`.
-- **Soft delete**: `is_deleted` (0/1) on: `address_book`, `dish`, `dish_flavor`, `setmeal`, `setmeal_dish`. **NOT** on `employee`, `category`, `orders`, `order_detail`, `shopping_cart`, `user`.
-- **Price storage**: Prices are stored in **cents (分)** as `decimal(10,2)`. The frontend divides by 100 to display yuan. E.g., `7800.00` in DB = ¥78.00.
-- **Password**: MD5 hash (`DigestUtils.md5DigestAsHex`). The seed admin password is `e10adc3949ba59abbe56e057f20f883e` (MD5 of `123456`). New employees default to `123456` (also MD5-hashed on save). No salt is used currently — consider upgrading to BCrypt in the future.
-- **Session**: Login stores `employee` id (Long) in `HttpSession` under key `"employee"`. The login check filter also supports a `"user"` key for future customer login.
+- **优先 inline 探索**：自己直接 Read/Grep/Glob 读代码，尽量少分发 Explore/Plan 子代理。减少独立 API 请求以提升 DeepSeek 缓存命中率。
+- 仅在任务范围广、确实需要并行探索多个子系统时才用 Agent 分发。
 
-### Tables
+## Git
 
-| Table           | Entity (to create) | Description             | Key fields                                                                                                                                                  |
-| --------------- | ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `employee`      | ✅ `Employee.java` | Staff accounts          | `username` (UNIQUE), `password` (MD5), `status` (0=禁用,1=正常), `id_number`                                                                                |
-| `category`      | ✅ `Category.java` | Dish & meal categories  | `type` (1=菜品分类, 2=套餐分类), `name` (UNIQUE), `sort`                                                                                                    |
-| `dish`          | —                  | Dishes/menu items       | `category_id`, `price` (cents), `code`, `image`, `status` (0=停售,1=起售), `is_deleted`                                                                     |
-| `dish_flavor`   | —                  | Flavor options per dish | `dish_id`, `name` (e.g. 辣度/温度/忌口), `value` (JSON array string like `["不辣","微辣","中辣","重辣"]`)                                                   |
-| `setmeal`       | —                  | Combo/set meals         | `category_id`, `price` (cents), `status`, `image`, `is_deleted`                                                                                             |
-| `setmeal_dish`  | —                  | Dishes in a set meal    | `setmeal_id`, `dish_id`, `name`, `price` (both redundant), `copies` (份数)                                                                                  |
-| `orders`        | —                  | Customer orders         | `number` (order #), `status` (1=待付款,2=待派送,3=已派送,4=已完成,5=已取消), `user_id`, `address_book_id`, `amount` (cents), `pay_method` (1=微信,2=支付宝) |
-| `order_detail`  | —                  | Line items in an order  | `order_id`, `dish_id` (nullable), `setmeal_id` (nullable), `dish_flavor`, `number`, `amount` (cents)                                                        |
-| `shopping_cart` | —                  | Customer cart           | `user_id`, `dish_id` (nullable), `setmeal_id` (nullable), `dish_flavor`, `number`, `amount` (cents)                                                         |
-| `address_book`  | —                  | Customer addresses      | `user_id`, `consignee`, `phone`, province/city/district breakdown, `is_default`                                                                             |
-| `user`          | —                  | Customer accounts       | `phone`, `name`, `sex`, `id_number`, `avatar`, `status`                                                                                                     |
-
-### Seed Data
-
-- **Admin user**: `id=1766200000000000001` (Snowflake-style), `username=admin`, `password=e10adc3949ba59abbe56e057f20f883e` (MD5 of `123456`), `status=1`
-- **Categories**: 湘菜, 川菜, 粤菜, 饮品, 主食 (dish categories); 商务套餐, 儿童套餐 (meal categories)
-- **Dishes**: ~20 dishes across categories with images, flavors, and descriptions
-- **Set meals**: 1 combo ("儿童套餐A计划") containing 3 dishes
-- **Addresses**: 2 sample addresses for test user
-
-## Configuration
-
-`src/main/resources/application.yml` configures:
-
-- **DataSource**: Druid → `reggie` database on `localhost:3306` (credentials in the file)
-- **MyBatis-Plus**: `map-underscore-to-camel-case: true`, `id-type: assign_id` (Snowflake)
-
-## Implementation Status
-
-Currently implemented:
-
-**Employee management:**
-
-- **Employee login**: `POST /employee/login` — MD5 password comparison, session management (invalidates old session, stores `employee` id in new one), returns `R<Employee>` or error
-- **Employee logout**: `POST /employee/logout` — invalidates session
-- **Employee pagination**: `GET /employee/page` — supports name fuzzy search, ordered by `update_time` desc
-- **Employee create**: `POST /employee` — username uniqueness check, auto-generates MD5 hash of default password `123456`, audit fields auto-filled by `MyMetaObjectHandler`
-- **Employee getById**: `GET /employee/{id}` — returns employee with password masked (set to null)
-- **Employee update**: `PUT /employee` — supports status toggle (enable/disable) and field edits, audit fields auto-filled by `MyMetaObjectHandler`
-
-**Category management:**
-
-- **Category create**: `POST /category` — name uniqueness enforced (throws `AppException` on duplicate, caught by `GlobalExceptionHandler`)
-- **Category pagination**: `GET /category/page` — supports name fuzzy search, ordered by `sort` ascending
-
-**Cross-cutting concerns:**
-
-- **Login check filter**: `LoginCheckFilter` (`@WebFilter("/*")`) — Ant-style path whitelist, checks session for `employee` or `user` attribute, returns `R.error("NOTLOGIN")` as JSON via `WebUtils`
-- **Global exception handler**: `GlobalExceptionHandler` (`@RestControllerAdvice`) — handles `AppException` (business errors) and uncaught `Exception` (server errors), returns `R.error(...)`
-- **Auto-fill handler**: `MyMetaObjectHandler` (implements `MetaObjectHandler`) — auto-sets `createTime`/`updateTime`/`createUser`/`updateUser` on insert and update. **Note:** `createUser`/`updateUser` currently hardcoded to `1L` — needs session-based user ID injection
-- **JacksonObjectMapper**: Custom `ObjectMapper` — serializes `Long`/`BigInteger` as `String` (prevents JS precision loss for Snowflake IDs), formats `LocalDateTime` as `yyyy-MM-dd HH:mm:ss`, `LocalDate` as `yyyy-MM-dd`, `LocalTime` as `HH:mm:ss`
-- **AppException**: Custom `RuntimeException` for business logic errors, caught by `GlobalExceptionHandler`
-- **WebUtils**: Spring-managed `@Component` for rendering `R<T>` as JSON to `HttpServletResponse`
-- **Static resource serving**: Both frontends accessible via `WebConfig` (extends `WebMvcConfigurationSupport`)
-
-Not yet implemented (frontend pages exist, waiting for backend APIs):
-
-- Category update/delete (分类管理的编辑和删除)
-- Dish management (菜品管理) with flavor options
-- Combo/meal management (套餐管理) with dish composition
-- Order management (订单明细)
-- Customer-facing APIs (category listing, dish listing, cart, address, order placement)
-- Customer user entity, login, and session management
-- File upload/download for images (`/common/upload`, `/common/download`)
-
-## Filter Architecture
-
-`LoginCheckFilter` (`@WebFilter("/*")`) intercepts all requests and uses `AntPathMatcher` for path matching:
-
-- **Whitelist** (passed through): `/employee/login`, `/employee/logout`, `/backend/**`, `/front/**`, `/common/**`, `/user/sendMsg`, `/user/login`, `/user/loginout`
-- **Auth check**: Looks for `employee` attribute in HttpSession (future: also `user` for customer login). Sets user ID into `BaseContext` (ThreadLocal) for downstream use by `MyMetaObjectHandler`.
-- **Cleanup**: `BaseContext.remove()` is called in a `finally` block after every authenticated request to prevent ThreadLocal leaks in Tomcat's thread pool.
-- **Rejection**: Calls `WebUtils.renderJson(response, R.error("NOTLOGIN"))` — the `NOTLOGIN` string is matched by the frontend Axios interceptor to redirect to the login page
-- **Registration**: `ReggieApplication` is annotated with `@ServletComponentScan` so `@WebFilter` is auto-detected
-
-`WebUtils` is a Spring-managed `@Component` that injects Jackson's `ObjectMapper` via setter injection into a static field, enabling static `renderJson()` calls from the filter.
-
-## Exception Handling
-
-**`AppException`** (`common/AppException.java`) is a custom `RuntimeException` for business logic errors. Throw it in controllers/services when a business rule is violated:
-
-```java
-throw new AppException("类别名重复，新增分类失败");
-```
-
-**`GlobalExceptionHandler`** (`common/GlobalExceptionHandler.java`) is a `@RestControllerAdvice` that catches exceptions globally:
-
-| Exception type          | Behavior                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `AppException`          | Returns `R.error(e.getMessage())` — the message is shown to the user                                |
-| `Exception` (catch-all) | Logs the stack trace, returns `R.error("服务器异常")` — generic message, no internal details leaked |
-
-This pattern eliminates try-catch blocks in controllers — just throw `AppException` and let the handler respond.
-
-## Auto-Fill (MetaObjectHandler)
-
-**`MyMetaObjectHandler`** (`common/MyMetaObjectHandler.java`) implements MyBatis-Plus `MetaObjectHandler` to auto-populate audit fields:
-
-| Operation    | Fields set                                             |
-| ------------ | ------------------------------------------------------ |
-| `insertFill` | `createTime`, `updateTime`, `createUser`, `updateUser` |
-| `updateFill` | `updateTime`, `updateUser`                             |
-
-The user ID comes from `BaseContext` (a `ThreadLocal<Long>` wrapper), which is set by `LoginCheckFilter` before each authenticated request and cleared in `finally` afterward. Entity classes should use `@TableField(fill = FieldFill.INSERT)` / `@TableField(fill = FieldFill.INSERT_UPDATE)` annotations on audit fields, and controllers no longer need to manually set these values.
-
-## JacksonObjectMapper (JSON Serialization)
-
-**`JacksonObjectMapper`** (`common/JacksonObjectMapper.java`) extends `ObjectMapper` with:
-
-1. **Long → String**: Snowflake IDs are 19-digit `Long` values, exceeding JavaScript's safe integer range (2^53-1 ≈ 9e15). Serializing as `String` prevents precision loss in the browser.
-2. **Java 8 time formatting**: `LocalDateTime` → `yyyy-MM-dd HH:mm:ss`, `LocalDate` → `yyyy-MM-dd`, `LocalTime` → `HH:mm:ss`
-3. **Unknown properties**: Configured to ignore unknown JSON fields during deserialization (no error).
-
-This mapper is registered via `WebConfig` → `extendMessageConverters` so all controller responses use it automatically.
-
-## Testing
-
-- **Framework**: JUnit 5 via `spring-boot-starter-test`
-- **Test package**: mirrors main layout under `src/test/java/com/wyc/reggie/`
-- Tests use `@SpringBootTest` for integration-level Spring context loading
-- Existing tests (`TestEmp`, `TestEmpService`) demonstrate the CRUD testing pattern with `@Order` for sequential execution
-- Use `MockMvc` for controller layer tests without starting a full server
-
-## Git Workflow
-
-- **Main branch**: `main` (remote default)
-- **Working branch**: `master` (local)
-- Commit format: `<type>: <description>` (types: feat, fix, refactor, docs, test, chore, perf, ci)
+- 分支: `master`（本地）
+- 提交格式: `<type>: <description>`（feat/fix/refactor/docs/test/chore/perf/ci）

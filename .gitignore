@@ -49,6 +49,7 @@ out/
 ### AI agent local state ###
 .claude/
 .grok/
+.reasonix/
 
 ### OS ###
 .DS_Store

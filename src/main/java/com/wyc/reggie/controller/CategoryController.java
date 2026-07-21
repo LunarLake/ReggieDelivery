@@ -49,23 +49,14 @@ public class CategoryController {
     //删除分类
     @DeleteMapping
     public R<String> delete(Long id) {
-        // 检查该分类下是否有关联菜品
-        LambdaQueryWrapper<Dish> dishWrapper = new LambdaQueryWrapper<>();
-        dishWrapper.eq(Dish::getCategoryId, id);
-        long dishCount = dishService.count(dishWrapper);
-
-        // 检查该分类下是否有关联套餐
-        LambdaQueryWrapper<Setmeal> setmealWrapper = new LambdaQueryWrapper<>();
-        setmealWrapper.eq(Setmeal::getCategoryId, id);
-        long setmealCount = setmealService.count(setmealWrapper);
-
-        // 有关联数据则不允许删除
-        if (dishCount > 0 || setmealCount > 0) {
-            throw new AppException("该分类下存在菜品或套餐，无法删除");
-        }
-
-        categoryService.removeById(id);
+        categoryService.remove(id);
         return R.success("分类删除成功");
     }
 
+    //修改分类
+    @PutMapping
+    public R<String> update(@RequestBody Category category) {
+        categoryService.updateById(category);
+        return R.success("分类修改成功");
+    }
 }
