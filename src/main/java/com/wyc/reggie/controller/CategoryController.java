@@ -5,25 +5,19 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.wyc.reggie.common.AppException;
 import com.wyc.reggie.common.R;
 import com.wyc.reggie.entity.Category;
-import com.wyc.reggie.entity.Dish;
-import com.wyc.reggie.entity.Setmeal;
 import com.wyc.reggie.service.CategoryService;
 import com.wyc.reggie.service.DishService;
 import com.wyc.reggie.service.SetmealService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/category")
 public class CategoryController {
     @Autowired
     private CategoryService categoryService;
-
-    @Autowired
-    private DishService dishService;
-
-    @Autowired
-    private SetmealService setmealService;
 
     //添加分类
     @PostMapping
@@ -58,5 +52,16 @@ public class CategoryController {
     public R<String> update(@RequestBody Category category) {
         categoryService.updateById(category);
         return R.success("分类修改成功");
+    }
+
+    // 根据条件查询分类数据
+    @GetMapping("/list")
+    public R<List<Category>> list(Category category) {
+        LambdaQueryWrapper<Category> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(category.getType() != null,
+                Category::getType, category.getType());
+        wrapper.orderByAsc(Category::getSort)
+                .orderByDesc(Category::getUpdateTime);
+        return R.success(categoryService.list(wrapper));
     }
 }

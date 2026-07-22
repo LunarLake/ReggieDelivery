@@ -2,77 +2,106 @@ package com.wyc.reggie.controller;
 
 import com.wyc.reggie.common.AppException;
 import com.wyc.reggie.common.R;
-import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
-// 上传下载文件控制器
 @Slf4j
 @RestController
 @RequestMapping("/common")
 public class CommonController {
 
+    @Value("${reggie.upload.path}")
+    private String basePath;
+
     @PostMapping("/upload")
     public R<String> upload(MultipartFile file) {
-        //1:创建变量保存上传图片路径
-        String basePath = "D:\\work\\reggie\\upload\\";
-        //2：获取原始文件名        abc.png
-        String oldFileName = file.getOriginalFilename();
-        //3：获取原始文件名中后缀   1.png
-        int idx = oldFileName.lastIndexOf(".");  //1
-        String suffix = oldFileName.substring(idx); //.png
-        //4:创建新文件名
-        String newFileName = UUID.randomUUID() + suffix;
-        //5:创建一个目录对象（上传图片路径）
-        File dir = new File(basePath);
-        //6:如果目录不存在创建
-        if (!dir.exists()) {
-            dir.mkdirs();//创建
+        if (file == null || file.isEmpty()) {
+            throw new AppException("上传文件不能为空");
         }
-        //7：将临时上传文件转存新目录中  12312.tmp 1d99d9d.png
+
+        String oldFileName = file.getOriginalFilename();
+        if (oldFileName == null || !oldFileName.contains(".")) {
+            throw new AppException("上传文件格式不正确");
+        }
+
+        String suffix = oldFileName.substring(oldFileName.lastIndexOf("."));
+        String newFileName = UUID.randomUUID() + suffix;
+
+        File dir = new File(basePath);
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new AppException("创建上传目录失败");
+        }
+
         try {
-            file.transferTo(new File(basePath + newFileName));
+            // 使用 absoluteFile 规避某些容器下的相对路径隐患
+            file.transferTo(new File(dir, newFileName).getAbsoluteFile());
         } catch (IOException e) {
-            log.info(e.getMessage());
+            log.error("上传文件失败: {}", e.getMessage());
             throw new AppException("上传文件失败");
         }
         return R.success(newFileName);
     }
 
-    @GetMapping("/download")
-    public void download(String name, HttpServletResponse response) {
+    /** 默认占位图，当请求的图片文件不存在时返回 */
+    private static final Resource PLACEHOLDER = new ClassPathResource("backend/images/noImg.png");
 
-        String basePath = "D:\\work\\reggie\\upload\\";
-        try {
-            //1:准备读取文件对象，准备发送客户对象
-            FileInputStream fis = new FileInputStream(
-                    new File(basePath + name));
-            ServletOutputStream outputStream = response.getOutputStream();
-            //2:指定发送客户图片类型 image/jpeg
-            response.setContentType("image/jpeg");
-            //3:读取源图片/向客户端发送数据   1024
-            int len = 0;   //实际上一次读取多少数 1.jpg 1025 [1024][1]
-            byte[] bytes = new byte[1024];
-            while ((len = fis.read(bytes)) != -1) {
-                outputStream.write(bytes, 0, len);
-                outputStream.flush();
-            }
-            //4:关闭文件对象，关闭发送客户对象
-            outputStream.close();
-            fis.close();
-        } catch (Exception e) {
-            log.info(e.getMessage());
-            throw new AppException("文件下载失败");
+    @GetMapping("/download")
+    public ResponseEntity<Resource> download(String name) {
+        if (name == null || name.isBlank()) {
+            return ResponseEntity.badRequest().build();
         }
+
+        // 1. 安全校验：解析规范化路径，防目录穿越 (Path Traversal)
+        Path basePathPath = Paths.get(basePath).toAbsolutePath().normalize();
+        Path filePath = basePathPath.resolve(name).normalize();
+
+        if (!filePath.startsWith(basePathPath)) {
+            log.warn("检测到非法文件路径访问请求: {}", name);
+            throw new AppException("非法文件名");
+        }
+
+        // 2. 尝试加载实际文件，不存在则降级为占位图
+        Resource resource;
+        try {
+            resource = new UrlResource(filePath.toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                log.debug("文件缺失，返回占位图: {}", filePath.getFileName());
+                resource = PLACEHOLDER;
+            }
+        } catch (MalformedURLException e) {
+            resource = PLACEHOLDER;
+        }
+
+        // 3. 动态获取 Media Type
+        String contentType;
+        try {
+            contentType = Files.probeContentType(filePath);
+        } catch (IOException e) {
+            contentType = null;
+        }
+        if (contentType == null) {
+            contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                .body(resource);
     }
 }

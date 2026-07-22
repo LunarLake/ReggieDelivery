@@ -4,10 +4,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.ServletComponentScan;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Slf4j
-@ServletComponentScan
-@SpringBootApplication
+@ServletComponentScan           // 扫描 Servlet 组件（Filter、Listener、Servlet）
+@SpringBootApplication          // SpringBoot应用的入口类
+@EnableTransactionManagement    // 开启事务管理
 public class ReggieApplication {
     public static void main(String[] args) {
 
