@@ -6,8 +6,6 @@ import com.wyc.reggie.common.AppException;
 import com.wyc.reggie.common.R;
 import com.wyc.reggie.entity.Category;
 import com.wyc.reggie.service.CategoryService;
-import com.wyc.reggie.service.DishService;
-import com.wyc.reggie.service.SetmealService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
