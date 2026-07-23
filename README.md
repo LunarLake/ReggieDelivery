@@ -23,22 +23,34 @@
 
 ## 功能概览
 
-### 已实现
+### 管理后台
 
 | 模块     | 功能                                                                                                |
 | -------- | --------------------------------------------------------------------------------------------------- |
 | 员工管理 | 登录/退出、分页查询（姓名模糊搜索）、新增、编辑、启用/禁用、按 ID 查询                              |
 | 分类管理 | 新增、分页、删除（关联校验）、修改、按类型条件查询                                                  |
 | 菜品管理 | 新增（含口味）、分页（含分类名）、按 ID 查询（含口味）、编辑、批量删除（启售中禁止）、批量启售/停售 |
+| 套餐管理 | 新增（含菜品关联）、分页（含分类名）、按 ID 查询（含菜品列表）、编辑、批量删除、批量启售/停售       |
+| 订单明细 | 分页查询（按订单号/时间范围）、查看详情、派送/完成状态流转                                          |
 | 文件服务 | 图片上传（UUID 重命名）、文件下载（防目录穿越、缺图降级占位图）                                     |
-| 基础设施 | 登录校验过滤器、全局异常处理、审计字段自动填充（ThreadLocal）、统一响应 `R<T>`                      |
 
-### 待实现
+### 用户端
 
-- 套餐管理（Setmeal CRUD，实体已就绪）
-- 订单明细
-- 用户端：分类与菜品浏览、购物车、地址、下单
-- 密码策略升级（如 BCrypt）
+| 模块   | 功能                                                       |
+| ------ | ---------------------------------------------------------- |
+| 登录   | 手机号 + 验证码登录（新用户自动注册）、退出                |
+| 点菜   | 分类浏览、菜品列表（含口味选择）、套餐列表、套餐内菜品查看 |
+| 购物车 | 添加（同品合并）、减少、清空、口味区分                     |
+| 地址簿 | 新增/编辑/删除地址、默认地址管理（每用户仅一个默认地址）   |
+| 下单   | 从购物车生成订单 + 明细、自动清空购物车、再来一单          |
+| 订单   | 分页历史订单（含订单明细）、再来一单                       |
+
+### 基础设施
+
+- 登录校验过滤器（员工 + 用户双 session）
+- 全局异常处理
+- 审计字段自动填充（ThreadLocal）
+- 统一响应 `R<T>`
 
 ## 环境要求
 
@@ -100,8 +112,10 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 | ------------ | --------------------------------------------------- |
 | 管理后台登录 | http://localhost:8080/backend/page/login/login.html |
 | 管理后台首页 | http://localhost:8080/backend/index.html            |
-| 用户端       | http://localhost:8080/front/index.html              |
+| 用户端首页   | http://localhost:8080/front/index.html              |
+| 用户端登录   | http://localhost:8080/front/page/login.html         |
 
+**用户端登录**：手机号 `13999999998`，验证码 `1234`（演示固定码）。  
 默认端口以 Spring Boot 为准（未改时一般为 `8080`）。
 
 ## 项目结构
@@ -110,85 +124,147 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 reggie/
 ├── pom.xml
 ├── mvnw / mvnw.cmd
-├── 数据库种子/db_reggie.sql             # 建库与种子数据
+├── 数据库种子/db_reggie.sql                # 建库与种子数据
 ├── src/main/java/com/wyc/reggie/
-│   ├── ReggieApplication.java          # 启动类
-│   ├── common/                         # 公共组件
-│   │   ├── R.java                      # 统一响应封装
-│   │   ├── AppException.java           # 业务异常
-│   │   ├── GlobalExceptionHandler.java # 全局异常处理（@ControllerAdvice）
-│   │   ├── JacksonObjectMapper.java    # JSON 序列化（Long→String、时间格式化）
-│   │   ├── MyMetaObjectHandler.java    # 审计字段自动填充（MetaObjectHandler）
-│   │   ├── BaseContext.java            # ThreadLocal 存储当前登录用户 ID
-│   │   └── WebUtils.java              # 响应工具
-│   ├── config/                         # 配置
-│   │   ├── WebConfig.java              # 静态资源映射 + Jackson 扩展
-│   │   └── MybatisPlusConfig.java      # MyBatis-Plus 分页插件
-│   ├── controller/                     # REST 接口
-│   │   ├── EmployeeController.java     # /employee
-│   │   ├── CategoryController.java     # /category
-│   │   ├── DishController.java         # /dish
-│   │   └── CommonController.java       # /common（上传下载）
+│   ├── ReggieApplication.java             # 启动类
+│   ├── common/                            # 公共组件
+│   │   ├── R.java                         # 统一响应封装
+│   │   ├── AppException.java              # 业务异常
+│   │   ├── GlobalExceptionHandler.java    # 全局异常处理
+│   │   ├── JacksonObjectMapper.java       # JSON 序列化
+│   │   ├── MyMetaObjectHandler.java       # 审计字段自动填充
+│   │   ├── BaseContext.java               # ThreadLocal 存储当前用户 ID
+│   │   └── WebUtils.java                  # 响应工具
+│   ├── config/
+│   │   ├── WebConfig.java                 # 静态资源映射 + Jackson
+│   │   └── MybatisPlusConfig.java         # MyBatis-Plus 分页插件
+│   ├── controller/
+│   │   ├── EmployeeController.java        # /employee
+│   │   ├── CategoryController.java        # /category
+│   │   ├── DishController.java            # /dish
+│   │   ├── SetmealController.java         # /setmeal
+│   │   ├── CommonController.java          # /common
+│   │   ├── UserController.java            # /user
+│   │   ├── ShoppingCartController.java    # /shoppingCart
+│   │   ├── AddressBookController.java     # /addressBook
+│   │   └── OrderController.java           # /order + /orderDetail
 │   ├── dto/
-│   │   └── DishDto.java                # 菜品数据传输对象（携带口味、分类名）
-│   ├── entity/                         # 数据库实体
-│   │   ├── Employee.java
-│   │   ├── Category.java
-│   │   ├── Dish.java
-│   │   ├── DishFlavor.java
-│   │   └── Setmeal.java
-│   ├── mapper/                         # MyBatis-Plus BaseMapper
-│   ├── service/ + impl/                # 业务层
-│   └── filter/                         # 过滤器
-│       └── LoginCheckFilter.java       # 登录校验（@WebFilter "/*"）
+│   │   ├── DishDto.java                   # 菜品 DTO（口味列表 + 分类名）
+│   │   └── SetmealDto.java                # 套餐 DTO（菜品列表 + 分类名）
+│   ├── entity/
+│   │   ├── Employee.java                  ├── ShoppingCart.java
+│   │   ├── Category.java                  ├── AddressBook.java
+│   │   ├── Dish.java                      ├── User.java
+│   │   ├── DishFlavor.java                ├── Orders.java
+│   │   ├── Setmeal.java                   └── OrderDetail.java
+│   │   └── SetmealDish.java
+│   ├── mapper/                            # MyBatis-Plus BaseMapper（每实体一个）
+│   ├── service/ + impl/                   # 业务层（每实体一个接口 + 实现）
+│   └── filter/
+│       └── LoginCheckFilter.java          # 登录校验（@WebFilter "/*"）
 └── src/main/resources/
-    ├── application.yml                 # 公共配置（无密码）
+    ├── application.yml                    # 公共配置
     ├── application-local.yml.example
-    ├── backend/                        # 管理端静态页
-    └── front/                          # 用户端静态页
+    ├── backend/                           # 管理端静态页
+    └── front/                             # 用户端静态页
 ```
 
 ## API 接口
 
 ### 员工管理 `/employee`
 
-| 方法 | 路径               | 说明                                           |
-| ---- | ------------------ | ---------------------------------------------- |
-| POST | `/employee/login`  | 登录（Session 存员工 ID，MD5 密码比对）        |
-| POST | `/employee/logout` | 退出（Session 失效）                           |
-| GET  | `/employee/page`   | 分页查询；参数 `page`、`pageSize`、可选 `name` |
-| POST | `/employee`        | 新增员工（初始密码 123456，校验用户名唯一）    |
-| PUT  | `/employee`        | 更新员工信息（启用/禁用）                      |
-| GET  | `/employee/{id}`   | 按 ID 查询（密码字段脱敏）                     |
+| 方法 | 路径               | 说明                                      |
+| ---- | ------------------ | ----------------------------------------- |
+| POST | `/employee/login`  | 登录（Session 存员工 ID，MD5 密码比对）   |
+| POST | `/employee/logout` | 退出                                      |
+| GET  | `/employee/page`   | 分页查询；参数 `page`、`pageSize`、`name` |
+| POST | `/employee`        | 新增员工（初始密码 123456）               |
+| PUT  | `/employee`        | 更新员工（启用/禁用）                     |
+| GET  | `/employee/{id}`   | 按 ID 查询（密码脱敏）                    |
 
 ### 分类管理 `/category`
 
-| 方法   | 路径             | 说明                                            |
-| ------ | ---------------- | ----------------------------------------------- |
-| POST   | `/category`      | 新增分类                                        |
-| GET    | `/category/page` | 分页查询；参数 `page`、`pageSize`               |
-| PUT    | `/category`      | 修改分类                                        |
-| DELETE | `/category`      | 删除分类（参数 `id`；关联菜品/套餐时拒绝）      |
-| GET    | `/category/list` | 条件查询；参数 `type`（1=菜品分类, 2=套餐分类） |
+| 方法   | 路径             | 说明                                    |
+| ------ | ---------------- | --------------------------------------- |
+| POST   | `/category`      | 新增分类                                |
+| GET    | `/category/page` | 分页查询                                |
+| PUT    | `/category`      | 修改分类                                |
+| DELETE | `/category`      | 删除（关联菜品/套餐时拒绝）             |
+| GET    | `/category/list` | 条件查询；参数 `type`（1=菜品, 2=套餐） |
 
 ### 菜品管理 `/dish`
 
-| 方法   | 路径                    | 说明                                                         |
-| ------ | ----------------------- | ------------------------------------------------------------ |
-| POST   | `/dish`                 | 新增菜品（JSON `DishDto`，含口味列表）                       |
-| GET    | `/dish/page`            | 分页查询；参数 `page`、`pageSize`、可选 `name`；返回含分类名 |
-| GET    | `/dish/{id}`            | 按 ID 查询，返回口味列表                                     |
-| PUT    | `/dish`                 | 更新菜品及口味                                               |
-| DELETE | `/dish`                 | 批量删除；参数 `ids`（逗号分隔）；启售中菜品拒绝删除         |
-| POST   | `/dish/status/{status}` | 批量启售/停售；`{status}` 为 0 或 1                          |
-| GET    | `/dish/list`            | 菜品列表（仅启售，供套餐弹窗用）；可选 `categoryId`、`name`  |
+| 方法   | 路径                    | 说明                                                      |
+| ------ | ----------------------- | --------------------------------------------------------- |
+| POST   | `/dish`                 | 新增菜品（body: `DishDto`，含口味列表）                   |
+| GET    | `/dish/page`            | 分页查询；返回含分类名                                    |
+| GET    | `/dish/{id}`            | 按 ID 查询，返回口味列表                                  |
+| PUT    | `/dish`                 | 更新菜品及口味                                            |
+| DELETE | `/dish`                 | 批量删除；参数 `ids`（逗号分隔）；启售中拒绝              |
+| POST   | `/dish/status/{status}` | 批量启售/停售                                             |
+| GET    | `/dish/list`            | 菜品列表（仅启售，含口味数据）；可选 `categoryId`、`name` |
+
+### 套餐管理 `/setmeal`
+
+| 方法   | 路径                       | 说明                                                  |
+| ------ | -------------------------- | ----------------------------------------------------- |
+| POST   | `/setmeal`                 | 新增套餐（body: `SetmealDto`，含菜品关联列表）        |
+| GET    | `/setmeal/page`            | 分页查询；返回含分类名                                |
+| GET    | `/setmeal/{id}`            | 按 ID 查询，返回套餐菜品列表                          |
+| PUT    | `/setmeal`                 | 更新套餐及菜品关联                                    |
+| DELETE | `/setmeal`                 | 批量删除；参数 `ids`；启售中拒绝                      |
+| POST   | `/setmeal/status/{status}` | 批量启售/停售                                         |
+| GET    | `/setmeal/list`            | 用户端：按分类查套餐列表；可选 `categoryId`、`status` |
+| GET    | `/setmeal/dish/{id}`       | 用户端：查询套餐内菜品详情                            |
+
+### 用户登录 `/user`
+
+| 方法 | 路径             | 说明                                |
+| ---- | ---------------- | ----------------------------------- |
+| POST | `/user/sendMsg`  | 发送验证码（演示版固定 `1234`）     |
+| POST | `/user/login`    | 手机号+验证码登录（新用户自动注册） |
+| POST | `/user/loginout` | 退出登录                            |
+
+### 购物车 `/shoppingCart`
+
+| 方法   | 路径                  | 说明                                                |
+| ------ | --------------------- | --------------------------------------------------- |
+| GET    | `/shoppingCart/list`  | 查看当前用户购物车                                  |
+| POST   | `/shoppingCart/add`   | 添加商品（同品合并数量，口味区分）；返回含 `number` |
+| POST   | `/shoppingCart/sub`   | 减少商品（归零自动删除）；返回 `{number: 新数量}`   |
+| DELETE | `/shoppingCart/clean` | 清空购物车                                          |
+
+### 地址簿 `/addressBook`
+
+| 方法   | 路径                      | 说明                             |
+| ------ | ------------------------- | -------------------------------- |
+| GET    | `/addressBook/list`       | 当前用户所有地址（默认地址优先） |
+| GET    | `/addressBook/lastUpdate` | 最近更新的地址                   |
+| POST   | `/addressBook`            | 新增地址（首个地址自动设为默认） |
+| PUT    | `/addressBook`            | 修改地址                         |
+| DELETE | `/addressBook`            | 删除地址；参数 `ids`             |
+| GET    | `/addressBook/{id}`       | 查询单个地址                     |
+| PUT    | `/addressBook/default`    | 设为默认地址（先清除其他默认）   |
+| GET    | `/addressBook/default`    | 获取默认地址                     |
+
+### 订单管理 `/order`
+
+| 方法 | 路径                | 说明                                                    |
+| ---- | ------------------- | ------------------------------------------------------- |
+| GET  | `/order/page`       | 管理端：分页查询；可选 `number`、`beginTime`、`endTime` |
+| GET  | `/orderDetail/{id}` | 查询订单详情（含订单明细）                              |
+| PUT  | `/order`            | 管理端：修改订单状态（body: `{id, status}`）            |
+| POST | `/order/submit`     | 用户端：提交订单（从购物车生成订单+明细，清空购物车）   |
+| GET  | `/order/list`       | 用户端：查询所有订单                                    |
+| GET  | `/order/userPage`   | 用户端：分页订单历史（含订单明细）                      |
+| POST | `/order/again`      | 用户端：再来一单（将历史订单明细重新加入购物车）        |
 
 ### 文件服务 `/common`
 
-| 方法 | 路径               | 说明                                               |
-| ---- | ------------------ | -------------------------------------------------- |
-| POST | `/common/upload`   | 上传文件（MultipartFile），UUID 重命名，返回文件名 |
-| GET  | `/common/download` | 下载文件；参数 `name`；防目录穿越，缺图返回占位图  |
+| 方法 | 路径               | 说明                                   |
+| ---- | ------------------ | -------------------------------------- |
+| POST | `/common/upload`   | 上传文件（MultipartFile），UUID 重命名 |
+| GET  | `/common/download` | 下载文件；参数 `name`；防目录穿越      |
 
 ## 分层约定
 
@@ -196,7 +272,7 @@ reggie/
 - **Service**：接口 `extends IService<Entity>`，实现 `extends ServiceImpl<Mapper, Entity>`
 - **查询 / 更新**：优先 `LambdaQueryWrapper` / `LambdaUpdateWrapper`
 - **主键**：Snowflake（`id-type: assign_id`），表主键 `bigint`，非数据库自增
-- **DTO**：跨表查询场景使用 DTO（如 `DishDto` 携带口味列表和分类名），避免循环依赖
+- **DTO**：跨表查询场景使用 DTO（如 `DishDto` 携带口味和分类名，`SetmealDto` 携带菜品列表）
 
 ## 统一响应 `R<T>`
 
@@ -211,8 +287,9 @@ R.error("消息");    // code = 0
 
 - 库名：`reggie`，charset：`utf8mb4`
 - 价格字段按 **分** 存储（`decimal(10,2)`），前端展示除以 100 为元
+- 审计字段（`create_time`/`update_time`/`create_user`/`update_user`）：大部分表有，由 `MyMetaObjectHandler` 自动填充；以下表**无审计字段**：`orders`、`order_detail`、`user`
 - 软删除表（`is_deleted` 0/1）：`dish`、`dish_flavor`、`setmeal`、`setmeal_dish`、`address_book`
-- 审计字段（`create_time`/`update_time`/`create_user`/`update_user`）由 `MyMetaObjectHandler` 自动填充
+- 订单状态码：1 待付款、2 待派送、3 已派送、4 已完成、5 已取消
 - 完整表结构与示例数据见 `数据库种子/db_reggie.sql`
 
 ## 登录校验
@@ -222,9 +299,9 @@ R.error("消息");    // code = 0
 - `/employee/login`、`/employee/logout`
 - `/backend/**`、`/front/**`（静态资源）
 - `/common/**`（文件上传下载）
-- `/user/sendMsg`、`/user/login`、`/user/loginout`（用户端预留）
+- `/user/sendMsg`、`/user/login`、`/user/loginout`
 
-未登录请求返回 `R.error("NOTLOGIN")`，前端拦截器触发跳转。
+认证逻辑：先检查 `employee` session（管理后台），再检查 `user` session（移动端用户），均未登录返回 `R.error("NOTLOGIN")`。
 
 ## 配置与安全
 
