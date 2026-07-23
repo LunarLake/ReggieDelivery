@@ -43,7 +43,17 @@ public class LoginCheckFilter implements Filter {
         if (employeeId != null) {
             BaseContext.setCurrentId(employeeId);
             try {
-                chain.doFilter(request, response); // 如果已登录，放行请求
+                chain.doFilter(request, response); // 如果员工已登录，放行请求
+            } finally {
+                BaseContext.remove();
+            }
+            return;
+        }
+        Long userId = (Long) httpRequest.getSession().getAttribute("user");
+        if (userId != null) {
+            BaseContext.setCurrentId(userId);
+            try {
+                chain.doFilter(request, response); // 如果用户已登录，放行请求
             } finally {
                 BaseContext.remove();
             }

@@ -8,7 +8,9 @@ import com.wyc.reggie.common.R;
 import com.wyc.reggie.dto.DishDto;
 import com.wyc.reggie.entity.Category;
 import com.wyc.reggie.entity.Dish;
+import com.wyc.reggie.entity.DishFlavor;
 import com.wyc.reggie.service.CategoryService;
+import com.wyc.reggie.service.DishFlavorService;
 import com.wyc.reggie.service.DishService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -31,6 +33,9 @@ public class DishController {
 
     @Autowired
     private CategoryService categoryService;
+
+    @Autowired
+    private DishFlavorService dishFlavorService;
 
     /** 新增菜品 — DishDto.flavors 默认为空 List，无需判空 */
     @PostMapping
@@ -126,18 +131,34 @@ public class DishController {
         return R.success("菜品状态修改成功");
     }
 
-    /** 菜品列表（套餐弹窗用）— 仅启售菜品 */
+    /** 菜品列表（用户端 + 套餐弹窗）— 仅启售菜品，含口味数据 */
     @GetMapping("/list")
     public R<List<DishDto>> list(Long categoryId, String name) {
         LambdaQueryWrapper<Dish> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(categoryId != null, Dish::getCategoryId, categoryId);
         wrapper.like(name != null && !name.isEmpty(), Dish::getName, name);
         wrapper.eq(Dish::getStatus, 1);
-        wrapper.orderByDesc(Dish::getUpdateTime);
-        List<DishDto> dtoList = dishService.list(wrapper).stream()
+        wrapper.orderByAsc(Dish::getSort).orderByDesc(Dish::getUpdateTime);
+        List<Dish> dishList = dishService.list(wrapper);
+
+        // 批量加载口味，按 dishId 分组
+        Map<Long, List<DishFlavor>> flavorMap = Map.of();
+        if (!dishList.isEmpty()) {
+            Set<Long> dishIds = dishList.stream()
+                    .map(Dish::getId)
+                    .collect(Collectors.toSet());
+            LambdaQueryWrapper<DishFlavor> flavorWrapper = new LambdaQueryWrapper<>();
+            flavorWrapper.in(DishFlavor::getDishId, dishIds);
+            flavorMap = dishFlavorService.list(flavorWrapper).stream()
+                    .collect(Collectors.groupingBy(DishFlavor::getDishId));
+        }
+
+        Map<Long, List<DishFlavor>> finalFlavorMap = flavorMap;
+        List<DishDto> dtoList = dishList.stream()
                 .map(dish -> {
                     DishDto dto = new DishDto();
                     BeanUtils.copyProperties(dish, dto);
+                    dto.setFlavors(finalFlavorMap.getOrDefault(dish.getId(), List.of()));
                     return dto;
                 })
                 .toList();
